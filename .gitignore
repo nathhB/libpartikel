@@ -77,3 +77,6 @@ Debug
 Release
 CMakeLists.txt.user
 
+.vscode
+build
+particles

@@ -29,6 +29,7 @@ static Camera2D camera;
 static Texture2D texCircle16;
 static Texture2D texCircle8;
 static Texture2D texCircle4;
+static Texture2D muzzleFlashTexture;
 
 static int activePS = 1;
 
@@ -46,6 +47,9 @@ static ParticleSystem *ps3 = NULL;
 static Emitter *emitterFlame1 = NULL;
 static Emitter *emitterFlame2 = NULL;
 static Emitter *emitterFlame3 = NULL;
+
+static ParticleSystem *ps4 = NULL;
+static Emitter *emitterMuzzle1 = NULL;
 
 // Define a custom particle deactivator function.
 bool Particle_DeactivatorFountain(Particle *p) {
@@ -81,6 +85,8 @@ void InitFountain() {
         .velocityAngle = (FloatRange){.min = 0, .max = 0},
         .velocity = (FloatRange){.min = 700, .max = 730},
         .externalAcceleration = (Vector2){.x = 0, .y = 981},
+        .baseScale = (Vector2){0.2, 0.2},
+        .scaleIncrease = (Vector2){0.8, 0.8},
         .startColor = (Color){.r = 0, .g = 20, .b = 255, .a = 255},
         .endColor = (Color){.r = 0, .g = 150, .b = 100, .a = 0},
         .age = (FloatRange){.min = 1.0, .max = 3.0},
@@ -135,6 +141,7 @@ void InitSwirl() {
         .directionAngle = (FloatRange){.min = -180, .max = 180},
         .velocityAngle = (FloatRange){.min = 90, .max = 90},
         .velocity = (FloatRange){.min = 200, .max = 500},
+        .baseScale = (Vector2){0.2, 0.2},
         .startColor = (Color){.r = 244, .g = 20, .b = 0, .a = 255},
         .endColor = (Color){.r = 244, .g = 20, .b = 0, .a = 0},
         .age = (FloatRange){.min = 2.5, .max = 5.0},
@@ -194,6 +201,7 @@ void InitFlame() {
         .directionAngle = (FloatRange){.min = -90, .max = -90},
         .velocityAngle = (FloatRange){.min = 90, .max = 90},
         .velocity = (FloatRange){.min = 30, .max = 150},
+        .baseScale = (Vector2){0.4, 0.4},
         .startColor = (Color){.r = 255, .g = 20, .b = 0, .a = 255},
         .endColor = (Color){.r = 255, .g = 20, .b = 0, .a = 0},
         .age = (FloatRange){.min = 1.0, .max = 2.0},
@@ -241,6 +249,43 @@ void InitFlame() {
     ParticleSystem_Start(ps3);
 }
 
+void InitMuzzleFlash() {
+    ps4 = ParticleSystem_New();
+    if(ps4 == NULL) {
+        OOMExit();
+    } 
+
+    EmitterConfig ecfg = {
+        .capacity = 10,
+        .emissionRate = 0,
+        .burst = (IntRange){.min = 1, .max = 1},
+        .origin = (Vector2){.x = 0, .y = 0},
+        .originAcceleration = (FloatRange){.min = 0, .max = 0},
+        .offset = (FloatRange){.min = 0, .max = 0},
+        .direction = (Vector2){.x = 0, .y = 0}, // go up
+        .directionAngle = (FloatRange){.min = 0, .max = 0},
+        .velocityAngle = (FloatRange){.min = 0, .max = 0},
+        .velocity = (FloatRange){.min = 0, .max = 0},
+        .baseScale = (Vector2){1, 1},
+        .scaleIncrease = (Vector2){0, 2},
+        .startColor = (Color){.r = 255, .g = 20, .b = 0, .a = 255},
+        .endColor = (Color){.r = 255, .g = 20, .b = 0, .a = 0},
+        .age = (FloatRange){.min = 0.2, .max = 0.2},
+        .texture = muzzleFlashTexture,
+        .blendMode = BLEND_ADDITIVE,
+
+        .particle_Deactivator = Particle_DeactivatorFountain
+    };
+
+    emitterMuzzle1 = Emitter_New(ecfg);
+    if(emitterMuzzle1 == NULL) {
+        OOMExit();
+    }
+    ParticleSystem_Register(ps4, emitterMuzzle1);
+
+    ParticleSystem_Start(ps4);
+}
+
 void DestroyFountain() {
     Emitter_Free(emitterFountain1);
     Emitter_Free(emitterFountain2);
@@ -267,9 +312,10 @@ void DestroyFlame() {
 
 // Init sets up all relevant data.
 void Init() {
+    SetConfigFlags(FLAG_WINDOW_HIGHDPI);
     InitWindow(screenWidth, screenHeight, "libpartikel demo");
     SetTargetFPS(121);
-    HideCursor();
+    // HideCursor();
 
     camera.target = (Vector2) {.x = 0, .y = 0};
     camera.offset = (Vector2) {.x = screenWidth/2, .y = screenHeight/2};
@@ -284,6 +330,8 @@ void Init() {
     Image imgCircle4 = GenImageGradientRadial(4, 4, 0.5f, WHITE, BLACK);
     texCircle4 = LoadTextureFromImage(imgCircle4);
 
+    muzzleFlashTexture = LoadTexture("../muzzle_flash1.png");
+
     UnloadImage(imgCircle4);
     UnloadImage(imgCircle8);
     UnloadImage(imgCircle16);
@@ -291,6 +339,7 @@ void Init() {
     InitFountain();
     InitSwirl();
     InitFlame();
+    InitMuzzleFlash();
 }
 
 // Destroy and free all the global data.
@@ -302,6 +351,7 @@ void Destroy() {
     UnloadTexture(texCircle4);
     UnloadTexture(texCircle8);
     UnloadTexture(texCircle16);
+    UnloadTexture(muzzleFlashTexture);
 
     // Close window and OpenGL context
     CloseWindow();
@@ -326,6 +376,9 @@ void Update(double dt) {
     case KEY_THREE:
         activePS = 3;
         break;
+    case KEY_FOUR:
+        activePS = 4;
+        break;
     case KEY_SPACE:
         trigger = true;
         break;
@@ -333,22 +386,48 @@ void Update(double dt) {
         break;
     }
 
-    switch (activePS) {
+    if (IsMouseButtonPressed(0))
+    {
+        switch (activePS)
+        {
+        case 1:
+            ParticleSystem_SetOrigin(ps1, (Vector2){.x = m.x, .y = m.y});
+            ParticleSystem_Burst(ps1);
+            break;
+        case 2:
+            ParticleSystem_SetOrigin(ps2, (Vector2){.x = m.x, .y = m.y});
+            ParticleSystem_Burst(ps2);
+            break;
+        case 3:
+            ParticleSystem_SetOrigin(ps3, (Vector2){.x = m.x, .y = m.y});
+            ParticleSystem_Burst(ps3);
+            break;
+        case 4:
+            ParticleSystem_SetOrigin(ps4, (Vector2){.x = m.x, .y = m.y});
+            ParticleSystem_Burst(ps4);
+            break;
+        default:
+            break;
+        }
+    }
+
+    switch (activePS)
+    {
     case 1:
-        ParticleSystem_SetOrigin(ps1, (Vector2){.x = m.x, .y = m.y});
         counter += ParticleSystem_Update(ps1, (float)dt);
         break;
     case 2:
-        ParticleSystem_SetOrigin(ps2, (Vector2){.x = m.x, .y = m.y});
         counter += ParticleSystem_Update(ps2, (float)dt);
-        break;        
+        break;
     case 3:
-        ParticleSystem_SetOrigin(ps3, (Vector2){.x = m.x, .y = m.y});
         counter += ParticleSystem_Update(ps3, (float)dt);
+        break;
+    case 4:
+        counter += ParticleSystem_Update(ps4, (float)dt);
         break;
     default:
         break;
-    }
+        }
 }
 
 void Draw() {
@@ -370,6 +449,9 @@ void Draw() {
         break;
     case 3:
         ParticleSystem_Draw(ps3);
+        break;
+    case 4:
+        ParticleSystem_Draw(ps4);
         break;
     default:
         break;

@@ -179,15 +179,19 @@ struct EmitterConfig {
     FloatRange offset;              // The min and max offset multiplier for the particle origin.
     FloatRange originAcceleration;  // An acceleration towards or from (centrifugal) the origin.
     IntRange burst;                 // The range of sudden particle bursts.
-    size_t capacity;                // Maximum amounts of particles in the system.
-    size_t emissionRate;            // Rate of emitted particles per second.
+    unsigned int capacity;          // Maximum amounts of particles in the system.
+    unsigned int emissionRate;      // Rate of emitted particles per second.
     Vector2 origin;                 // Origin is the source of the emitter.
     Vector2 externalAcceleration;   // External constant acceleration. e.g. gravity.
+    Vector2 baseScale;              // Initial scale of particles
+    Vector2 scaleIncrease;          // Scale increase on both X & Y
     Color startColor;               // The color the particle starts with when it spawns.
     Color endColor;                 // The color the particle ends with when it disappears.
     FloatRange age;                 // Age range of particles in seconds.
     BlendMode blendMode;            // Color blending mode for all particles of this Emitter.
+    FloatRange rotationSpeed;       // Speed rotation of particles
     Texture2D texture;              // The texture used as particle texture.    
+    Vector2 textureOrigin;          // Origin of the particle's texture
 
     bool (*particle_Deactivator)(struct Particle *); // Pointer to a function that determines when
                                                      // a particle is deactivated.
@@ -203,6 +207,10 @@ struct Particle {
     Vector2 position;               // Position of the particle in 2d space.
     Vector2 velocity;               // Velocity vector in 2d space.
     Vector2 externalAcceleration;   // Acceleration vector in 2d space.
+    Vector2 scale;                  // Scale of the particle (both X & Y)
+    Vector2 scaleIncrease;          // Scale increase (both X & Y)
+    float rotation;                 // Particle's current rotation
+    float rotationSpeed;            // Particle's rotation speed
     float originAcceleration;       // Accelerates velocity vector
     float age;                      // Age is measured in seconds.
     float ttl;                      // Ttl is the time to live in seconds.
@@ -230,6 +238,8 @@ Particle * Particle_New(bool (*deactivatorFunc)(struct Particle *)) {
         .velocity = (Vector2){.x = 0, .y = 0},
         .externalAcceleration = (Vector2){.x = 0, .y = 0},
         .originAcceleration = 0,
+        .rotation = 0,
+        .rotationSpeed = 0,
         .age = 0,
         .ttl = 0,
         .active = false,
@@ -276,12 +286,19 @@ void Particle_Init(Particle *p, EmitterConfig *cfg) {
     p->position.x = cfg->origin.x + res.x * rando;
     p->position.y = cfg->origin.y + res.y * rando;
 
+    // Set initial scale
+    p->scale = cfg->baseScale;
+    p->scaleIncrease = cfg->scaleIncrease;
+
     // Get a random value for the intrinsic particle acceleration
     float rands = GetRandomFloat(cfg->originAcceleration.min, cfg->originAcceleration.max);
     p->originAcceleration = rands;
     p->externalAcceleration = cfg->externalAcceleration;
     p->ttl = GetRandomFloat(cfg->age.min, cfg->age.max);
     p->active = true;
+
+    // Get a random rotation speed
+    p->rotationSpeed = GetRandomFloat(cfg->rotationSpeed.min, cfg->rotationSpeed.max);
 }
 
 // Particle_update updates all properties according to the delta time (in seconds).
@@ -314,6 +331,18 @@ void Particle_Update(Particle *p, float dt) {
     // Update position by velocity.
     p->position.x += p->velocity.x * dt;
     p->position.y += p->velocity.y * dt;
+
+    // Update particle scale
+    p->scale.x += p->scaleIncrease.x * dt;
+    p->scale.y += p->scaleIncrease.y * dt;
+
+    // Update particle rotation
+    p->rotation = p->rotation + p->rotationSpeed * dt;
+
+    if (p->rotation < 0)
+        p->rotation += 360.0f;
+    else if (p->rotation > 360.0f)
+        p->rotation -= 360.0f;
 }
 
 
@@ -323,9 +352,10 @@ void Particle_Update(Particle *p, float dt) {
 // Emitter is a single (point) source emitting many particles.
 struct Emitter {
     EmitterConfig config;
-    float mustEmit;            // Amount of particles to be emitted within next update call.
+    float mustEmit;             // Amount of particles to be emitted within next update call.
     Vector2 offset;             // Offset holds half the width and height of the texture.
     bool isEmitting;
+    bool isActive;              // Will spawn particles or not
     Particle **particles;       // Array of all particles (by pointer).
 };
 
@@ -336,8 +366,9 @@ Emitter * Emitter_New(EmitterConfig cfg) {
         return NULL;
     }
     e->config = cfg;
-    e->offset.x = e->config.texture.width/2;
-    e->offset.y = e->config.texture.height/2;
+    e->offset.x = 0;
+    e->offset.y = 0;
+    e->isActive = true;
     e->particles = calloc(e->config.capacity, sizeof(Particle *));
     if(e->particles == NULL) {
         free(e);
@@ -416,6 +447,9 @@ void Emitter_Free(Emitter *e) {
 // ignoring the state of e->isEmitting. Use this for singular events
 // instead of continuous output.
 void Emitter_Burst(Emitter *e) {
+    if (!e->isActive)
+        return;
+
     Particle *p = NULL;
     size_t emitted = 0;
 
@@ -470,10 +504,14 @@ void Emitter_Draw(Emitter *e) {
     for(size_t i = 0; i < e->config.capacity; i++) {
         Particle *p = e->particles[i];
         if(p->active) {
-            DrawTexture(e->config.texture,
-                        e->particles[i]->position.x - e->offset.x,
-                        e->particles[i]->position.y - e->offset.y,
-                        LinearFade(e->config.startColor, e->config.endColor,p->age/p->ttl));
+            DrawTexturePro(
+                e->config.texture,
+                (Rectangle){0, 0, e->config.texture.width, e->config.texture.height},
+                (Rectangle){p->position.x - e->offset.x, p->position.y - e->offset.y, e->config.texture.width * p->scale.x, e->config.texture.height * p->scale.y},
+                (Vector2){e->config.textureOrigin.x * p->scale.x, e->config.textureOrigin.y * p->scale.y},
+                p->rotation,
+                LinearFade(e->config.startColor, e->config.endColor,p->age/p->ttl)
+            );
         }
     }
     EndBlendMode();
