@@ -147,7 +147,7 @@ static EmitterConfig base_cfg = {
     .endColor = WHITE,
     .age = (FloatRange){0.5, 0.5},
     .blendMode = BLEND_ADDITIVE,
-    .rotationSpeed = 0
+    .rotationSpeed = (FloatRange){0, 0}
 };
 
 static ParticleSystem *ps = NULL;
@@ -899,7 +899,6 @@ static bool Import(const char *path)
 
         ec->emitter->config.texture = tex;
         ec->particle_editor_render_tex = LoadRenderTexture(tex.width, tex.height);
-        ec->emitter->config.textureOrigin = (Vector2){tex.width / 2, tex.height / 2};
 
         i++;
     }
