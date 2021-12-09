@@ -33,6 +33,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
+#include <assert.h>
 
 #define RAYGUI_IMPLEMENTATION
 #include "raygui.h"
@@ -85,12 +86,14 @@ static Color HexToRGB(int hex);
 static bool Export(void);
 static bool Import(const char *path);
 static int WriteEmitterIntValue(char *str, size_t size, int val);
+static int WriteEmitterFloatValue(char *str, size_t size, float val);
 static int WriteEmitterFloatRange(char *str, size_t size, FloatRange val);
 static int WriteEmitterIntRange(char *str, size_t size, IntRange val);
 static int WriteEmitterVector2(char *str, size_t size, Vector2 val);
 static int WriteEmitterColor(char *str, size_t size, Color val);
 static int WriteEmitterString(char *str, size_t size, const char *to_write);
 static int ReadEmitterIntValue(char *str, int *val);
+static int ReadEmitterFloatValue(char *str, float *val);
 static int ReadEmitterFloatRange(char *str, FloatRange *val);
 static int ReadEmitterIntRange(char *str, IntRange *val);
 static int ReadEmitterVector2(char *str, Vector2 *val);
@@ -122,9 +125,12 @@ static EmitterControl emitters[EMITTER_COUNT] = {
 };
 static EmitterControl *selected_emitter = NULL;
 static GuiFileDialogState sprite_dialog_state;
+static GuiFileDialogState import_dialog_state;
 static unsigned int particle_count = 0;
 static bool last_export_res = false;
 static bool export_popup = false;
+static char selected_file[512] = {0};
+static bool has_imported_file = false;
 
 // ----------------
 
@@ -168,6 +174,7 @@ int main()
     selected_emitter = &emitters[0];
 
     sprite_dialog_state = InitGuiFileDialog(520, 410, GetWorkingDirectory(), false);
+    import_dialog_state = InitGuiFileDialog(520, 410, GetWorkingDirectory(), false);
     simulation_render_tex = LoadRenderTexture(EDITOR_WIDTH, SIMULATION_HEIGHT);
 
     InitParticleSystem();
@@ -176,6 +183,20 @@ int main()
 
     while (!WindowShouldClose())
     {
+        // check for imported file
+        if (import_dialog_state.SelectFilePressed)
+        {
+            memset(selected_file, 0, sizeof(selected_file));
+            strcpy(selected_file, TextFormat("%s/%s", import_dialog_state.dirPathText, import_dialog_state.fileNameText));
+
+            bool res = Import(selected_file);
+
+            assert(res); // display error popup
+
+            has_imported_file = true;
+            import_dialog_state.SelectFilePressed = false;
+        }
+
         UpdateParticleSpriteEditor();
 
         BeginTextureMode(simulation_render_tex);
@@ -188,9 +209,9 @@ int main()
         ClearBackground(BLACK);
 
         if (!export_popup)
-            ProcessInputs(); 
+            ProcessInputs();
 
-        particle_count = ParticleSystem_Update(ps, GetFrameTime()); 
+        particle_count = ParticleSystem_Update(ps, GetFrameTime());
 
         DrawTexturePro(
             simulation_render_tex.texture,
@@ -314,7 +335,7 @@ static void ProcessInputs(void)
     {
         Vector2 click_pos = GetMousePosition();
 
-        if (!sprite_dialog_state.fileDialogActive && CheckCollisionPointRec(click_pos, SIMULATION_RECT))
+        if (!sprite_dialog_state.fileDialogActive && !import_dialog_state.fileDialogActive && CheckCollisionPointRec(click_pos, SIMULATION_RECT))
         {
             ParticleSystem_SetOrigin(ps, click_pos);
             ParticleSystem_Burst(ps);
@@ -326,7 +347,7 @@ static void DrawUI(void)
 {
     GuiEnable();
 
-    if (sprite_dialog_state.fileDialogActive)
+    if (sprite_dialog_state.fileDialogActive || import_dialog_state.fileDialogActive)
         GuiLock();
 
     if (export_popup)
@@ -337,9 +358,9 @@ static void DrawUI(void)
 
     GuiPanel((Rectangle){CONTROLS_RECT.x - 2, CONTROLS_RECT.y, CONTROLS_RECT.width + 4, CONTROLS_RECT.height + 2});
 
-    DrawEmittersBar(); 
+    DrawEmittersBar();
     DrawParticleSpriteEditor();
-    DrawEmittersControls(); 
+    DrawEmittersControls();
 }
 
 static void DrawMetrics(void)
@@ -354,7 +375,7 @@ static void DrawToolbar(void)
 
     if (GuiButton((Rectangle){rect.x, rect.y, 150, TOOLBAR_HEIGHT}, "Load"))
     {
-        Import("foobar");
+        import_dialog_state.fileDialogActive = true;
     }
 
     if (GuiButton((Rectangle){rect.x + 160, rect.y, 150, TOOLBAR_HEIGHT}, "Export"))
@@ -486,7 +507,7 @@ static void DrawEmittersControls(void)
         "Life time",
         (Vector2){x, y + SELECTOR_HEIGHT + 20},
         &selected_emitter->emitter->config.age,
-        0, 30); 
+        0, 30);
 
     // Fourth column
 
@@ -512,6 +533,7 @@ static void DrawEmittersControls(void)
     GuiUnlock();
 
     GuiFileDialog(&sprite_dialog_state);
+    GuiFileDialog(&import_dialog_state);
 }
 
 static void DrawParticleSpriteEditor(void)
@@ -545,7 +567,7 @@ static void DrawFloatRangeSelector(const char *name, Vector2 pos, FloatRange *va
     // min
 
     GuiSetStyle(LABEL, TEXT_ALIGNMENT, GUI_TEXT_ALIGN_CENTER);
-    GuiLabel((Rectangle){rect.x, rect.y + 30, rect.width, 30}, TextFormat("%.02f", val->min));
+    GuiLabel((Rectangle){rect.x, rect.y + 30, rect.width, 30}, TextFormat("%.03f", val->min));
 
     val->min = GuiSlider((Rectangle){rect.x + 40, rect.y + 55, rect.width - 80, 20}, "min", "", val->min, min, max);
 
@@ -676,7 +698,8 @@ static Color HexToRGB(int hex)
 
 static bool Export(void)
 {
-    FILE *f = fopen("foobar", "w");
+    // TODO: open a popup to select file name when no file has been imported
+    FILE *f = fopen(has_imported_file ? selected_file : "foobar", "w");
 
     if (!f)
         return false;
@@ -754,14 +777,14 @@ static bool Export(void)
         cursor += len;
 
         if ((len = WriteEmitterVector2(emitter_str + cursor, sizeof(emitter_str) - cursor - 1, e->config.scaleIncrease)) < 0)
-            goto write_error; 
+            goto write_error;
 
         cursor += len;
 
         if ((len = WriteEmitterColor(emitter_str + cursor, sizeof(emitter_str) - cursor - 1, e->config.startColor)) < 0)
             goto write_error;
 
-        cursor += len; 
+        cursor += len;
 
         if ((len = WriteEmitterColor(emitter_str + cursor, sizeof(emitter_str) - cursor - 1, e->config.endColor)) < 0)
             goto write_error;
@@ -769,6 +792,11 @@ static bool Export(void)
         cursor += len;
 
         if ((len = WriteEmitterFloatRange(emitter_str + cursor, sizeof(emitter_str) - cursor - 1, e->config.age)) < 0)
+            goto write_error;
+
+        cursor += len;
+
+        if ((len = WriteEmitterFloatValue(emitter_str + cursor, sizeof(emitter_str) - cursor - 1, e->config.baseRotation)) < 0)
             goto write_error;
 
         cursor += len;
@@ -883,13 +911,16 @@ static bool Import(const char *path)
         if (ReadEmitterFloatRange(tokens[15], &e->config.age) < 0)
             goto read_error;
 
-        if (ReadEmitterFloatRange(tokens[16], &e->config.rotationSpeed) < 0)
+        if (ReadEmitterFloatValue(tokens[16], &e->config.baseRotation) < 0)
             goto read_error;
 
-        if (ReadEmitterVector2(tokens[17], &e->config.textureOrigin) < 0)
+        if (ReadEmitterFloatRange(tokens[17], &e->config.rotationSpeed) < 0)
             goto read_error;
 
-        if (ReadEmitterString(tokens[18], ec->texture_path) < 0)
+        if (ReadEmitterVector2(tokens[18], &e->config.textureOrigin) < 0)
+            goto read_error;
+
+        if (ReadEmitterString(tokens[19], ec->texture_path) < 0)
             goto read_error;
 
         UnloadTexture(ec->emitter->config.texture);
@@ -903,12 +934,12 @@ static bool Import(const char *path)
         i++;
     }
 
+    return true;
+
 read_error:
     fclose(f);
 
     return false;
-
-    return true;
 }
 
 static int WriteEmitterIntValue(char *str, size_t size, int val)
@@ -916,6 +947,20 @@ static int WriteEmitterIntValue(char *str, size_t size, int val)
     char val_str[32] = {0};
 
     int len = snprintf(val_str, sizeof(val_str), "%d|", val);
+
+    if (len > size)
+        return -1;
+
+    strncpy(str, val_str, size);
+
+    return len;
+}
+
+static int WriteEmitterFloatValue(char *str, size_t size, float val)
+{
+    char val_str[32] = {0};
+
+    int len = snprintf(val_str, sizeof(val_str), "%f|", val);
 
     if (len > size)
         return -1;
@@ -999,6 +1044,16 @@ static int ReadEmitterIntValue(char *str, int *val)
     return len;
 }
 
+static int ReadEmitterFloatValue(char *str, float *val)
+{
+    int len = sscanf(str, "%f", val);
+
+    if (!len)
+        return -1;
+
+    return len;
+}
+
 static int ReadEmitterFloatRange(char *str, FloatRange *val)
 {
     int len = sscanf(str, "%f,%f", &val->min, &val->max);
@@ -1053,5 +1108,5 @@ static const char *GetExportCommentLine(void)
 {
     return "# is active | direction | velocity | direction angle | velocity angle | offset | \
 origin acceleration | burst | capacity | origin | external acceleration | base scale | scale increase | \
-start color | end color | life time | rotation speed | texture origin | texture path\n";
+start color | end color | life time | base rotation | rotation speed | texture origin | texture path\n";
 }
