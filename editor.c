@@ -820,6 +820,7 @@ static bool Export(void)
             goto write_error;
     }
 
+    fclose(f);
     return true;
 
 write_error:
@@ -934,6 +935,7 @@ static bool Import(const char *path)
         i++;
     }
 
+    fclose(f);
     return true;
 
 read_error:

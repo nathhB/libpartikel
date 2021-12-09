@@ -1,3 +1,5 @@
+#pragma once
+
 /**********************************************************************************************
 *
 *   libpartikel v0.0.3 ALPHA
@@ -62,6 +64,17 @@
 #define LIBPARTIKEL_IMPLEMENTATION
 // -----------------------------------------------------------------------
 
+// Min/Max pair structs for various types.
+typedef struct FloatRange {
+    float min;
+    float max;
+} FloatRange;
+
+typedef struct IntRange {
+    int min;
+    int max;
+} IntRange;
+
 // Needed forward declarations.
 //----------------------------------------------------------------------------------
 typedef struct Particle Particle;
@@ -69,6 +82,85 @@ typedef struct EmitterConfig EmitterConfig;
 typedef struct Emitter Emitter;
 typedef struct ParticleSystem ParticleSystem;
 
+// EmitterConfig type.
+//----------------------------------------------------------------------------------
+struct EmitterConfig {
+    Vector2 direction;              // Direction vector will be normalized.
+    FloatRange velocity;            // The possible range of the particle velocities.
+                                    // Velocity is a scalar defining the length of the direction vector.
+    FloatRange directionAngle;      // The angle range modiying the direction vector.
+    FloatRange velocityAngle;       // The angle range to rotate the velocity vector.
+    FloatRange offset;              // The min and max offset multiplier for the particle origin.
+    FloatRange originAcceleration;  // An acceleration towards or from (centrifugal) the origin.
+    IntRange burst;                 // The range of sudden particle bursts.
+    unsigned int capacity;          // Maximum amounts of particles in the system.
+    unsigned int emissionRate;      // Rate of emitted particles per second.
+    Vector2 origin;                 // Origin is the source of the emitter.
+    Vector2 externalAcceleration;   // External constant acceleration. e.g. gravity.
+    Vector2 baseScale;              // Initial scale of particles
+    float baseRotation;             // Initial particle's rotation
+    Vector2 scaleIncrease;          // Scale increase on both X & Y
+    Color startColor;               // The color the particle starts with when it spawns.
+    Color endColor;                 // The color the particle ends with when it disappears.
+    FloatRange age;                 // Age range of particles in seconds.
+    BlendMode blendMode;            // Color blending mode for all particles of this Emitter.
+    FloatRange rotationSpeed;       // Speed rotation of particles
+    Texture2D texture;              // The texture used as particle texture.    
+    Vector2 textureOrigin;          // Origin of the particle's texture
+
+    bool (*particle_Deactivator)(Particle *); // Pointer to a function that determines when
+                                                     // a particle is deactivated.
+};
+
+// Particle type.
+//----------------------------------------------------------------------------------
+
+// Particle describes one particle in a particle system.
+struct Particle {
+    Vector2 origin;                 // The origin of the particle (never changes).
+    Vector2 position;               // Position of the particle in 2d space.
+    Vector2 velocity;               // Velocity vector in 2d space.
+    Vector2 externalAcceleration;   // Acceleration vector in 2d space.
+    Vector2 scale;                  // Scale of the particle (both X & Y)
+    Vector2 scaleIncrease;          // Scale increase (both X & Y)
+    float rotation;                 // Particle's current rotation
+    float rotationSpeed;            // Particle's rotation speed
+    float originAcceleration;       // Accelerates velocity vector
+    float age;                      // Age is measured in seconds.
+    float ttl;                      // Ttl is the time to live in seconds.
+    bool active;                    // Inactive particles are neither updated nor drawn.
+
+    bool (*particle_Deactivator)(struct Particle *); // Pointer to a function that determines
+                                                     // when a particle is deactivated.
+};
+
+// Emitter type.
+//----------------------------------------------------------------------------------
+
+// Emitter is a single (point) source emitting many particles.
+struct Emitter {
+    EmitterConfig config;
+    float mustEmit;             // Amount of particles to be emitted within next update call.
+    Vector2 offset;             // Offset holds half the width and height of the texture.
+    bool isEmitting;
+    bool isActive;              // Will spawn particles or not
+    Particle **particles;       // Array of all particles (by pointer).
+};
+
+// ParticleSystem type.
+//----------------------------------------------------------------------------------
+
+// ParticleSystem is a set of emitters grouped logically
+// together to achieve a specific visual effect.
+// While Emitters can be used independently, ParticleSystem
+// offers some convenience for handling many Emitters at once.
+struct ParticleSystem {
+    bool active;
+    unsigned int length;
+    unsigned int capacity;
+    Vector2 origin;
+    Emitter **emitters;
+};
 
 // Function signatures (comments are found in implementation below)
 //----------------------------------------------------------------------------------
@@ -96,6 +188,8 @@ ParticleSystem * ParticleSystem_New(void);
 bool ParticleSystem_Register(ParticleSystem *ps, Emitter *emitter);
 bool ParticleSystem_Deregister(ParticleSystem *ps, Emitter *emitter);
 void ParticleSystem_SetOrigin(ParticleSystem *ps, Vector2 origin);
+void ParticleSystem_SetDirectionAngle(ParticleSystem *ps, FloatRange range);
+void ParticleSystem_SetBaseRotation(ParticleSystem *ps, float rotation);
 void ParticleSystem_Start(ParticleSystem *ps);
 void ParticleSystem_Stop(ParticleSystem *ps);
 void ParticleSystem_Burst(ParticleSystem *ps);
@@ -155,70 +249,6 @@ Color LinearFade(Color c1, Color c2, float fraction) {
 
     return c;
 }
-
-// Min/Max pair structs for various types.
-typedef struct FloatRange {
-    float min;
-    float max;
-} FloatRange;
-
-typedef struct IntRange {
-    int min;
-    int max;
-} IntRange;
-
-
-// EmitterConfig type.
-//----------------------------------------------------------------------------------
-struct EmitterConfig {
-    Vector2 direction;              // Direction vector will be normalized.
-    FloatRange velocity;            // The possible range of the particle velocities.
-                                    // Velocity is a scalar defining the length of the direction vector.
-    FloatRange directionAngle;      // The angle range modiying the direction vector.
-    FloatRange velocityAngle;       // The angle range to rotate the velocity vector.
-    FloatRange offset;              // The min and max offset multiplier for the particle origin.
-    FloatRange originAcceleration;  // An acceleration towards or from (centrifugal) the origin.
-    IntRange burst;                 // The range of sudden particle bursts.
-    unsigned int capacity;          // Maximum amounts of particles in the system.
-    unsigned int emissionRate;      // Rate of emitted particles per second.
-    Vector2 origin;                 // Origin is the source of the emitter.
-    Vector2 externalAcceleration;   // External constant acceleration. e.g. gravity.
-    Vector2 baseScale;              // Initial scale of particles
-    Vector2 scaleIncrease;          // Scale increase on both X & Y
-    Color startColor;               // The color the particle starts with when it spawns.
-    Color endColor;                 // The color the particle ends with when it disappears.
-    FloatRange age;                 // Age range of particles in seconds.
-    BlendMode blendMode;            // Color blending mode for all particles of this Emitter.
-    FloatRange rotationSpeed;       // Speed rotation of particles
-    Texture2D texture;              // The texture used as particle texture.    
-    Vector2 textureOrigin;          // Origin of the particle's texture
-
-    bool (*particle_Deactivator)(struct Particle *); // Pointer to a function that determines when
-                                                     // a particle is deactivated.
-};
-
-
-// Particle type.
-//----------------------------------------------------------------------------------
-
-// Particle describes one particle in a particle system.
-struct Particle {
-    Vector2 origin;                 // The origin of the particle (never changes).
-    Vector2 position;               // Position of the particle in 2d space.
-    Vector2 velocity;               // Velocity vector in 2d space.
-    Vector2 externalAcceleration;   // Acceleration vector in 2d space.
-    Vector2 scale;                  // Scale of the particle (both X & Y)
-    Vector2 scaleIncrease;          // Scale increase (both X & Y)
-    float rotation;                 // Particle's current rotation
-    float rotationSpeed;            // Particle's rotation speed
-    float originAcceleration;       // Accelerates velocity vector
-    float age;                      // Age is measured in seconds.
-    float ttl;                      // Ttl is the time to live in seconds.
-    bool active;                    // Inactive particles are neither updated nor drawn.
-
-    bool (*particle_Deactivator)(struct Particle *); // Pointer to a function that determines
-                                                     // when a particle is deactivated.
-};
 
 // Particle_DeactivatorAge is the default deactivator function that
 // disables particles only if their age exceeds their time to live.
@@ -297,6 +327,9 @@ void Particle_Init(Particle *p, EmitterConfig *cfg) {
     p->ttl = GetRandomFloat(cfg->age.min, cfg->age.max);
     p->active = true;
 
+    // Set initial rotation
+    p->rotation = cfg->baseRotation;
+
     // Get a random rotation speed
     p->rotationSpeed = GetRandomFloat(cfg->rotationSpeed.min, cfg->rotationSpeed.max);
 }
@@ -345,20 +378,6 @@ void Particle_Update(Particle *p, float dt) {
         p->rotation -= 360.0f;
 }
 
-
-// Emitter type.
-//----------------------------------------------------------------------------------
-
-// Emitter is a single (point) source emitting many particles.
-struct Emitter {
-    EmitterConfig config;
-    float mustEmit;             // Amount of particles to be emitted within next update call.
-    Vector2 offset;             // Offset holds half the width and height of the texture.
-    bool isEmitting;
-    bool isActive;              // Will spawn particles or not
-    Particle **particles;       // Array of all particles (by pointer).
-};
-
 // Emitter_New creates a new Emitter object.
 Emitter * Emitter_New(EmitterConfig cfg) {
     Emitter *e = calloc(1, sizeof(Emitter));
@@ -378,7 +397,7 @@ Emitter * Emitter_New(EmitterConfig cfg) {
     // Normalize direction for future uses.
     e->config.direction = NormalizeV2(e->config.direction);
 
-    for(size_t i = 0; i < e->config.capacity; i++) {
+    for(unsigned int i = 0; i < e->config.capacity; i++) {
         e->particles[i] = Particle_New(e->config.particle_Deactivator);
     }
 
@@ -396,12 +415,12 @@ bool Emitter_Reinit(Emitter *e, EmitterConfig cfg) {
         e->particles = newParticles;
 
         // Create new Particles
-        for(size_t i = e->config.capacity; i < cfg.capacity; i++) {
+        for(unsigned int i = e->config.capacity; i < cfg.capacity; i++) {
             e->particles[i] = Particle_New(cfg.particle_Deactivator);
         }
     } else if(cfg.capacity < e->config.capacity) {
         // First we free the now obsolete Particles.
-        for(size_t i = cfg.capacity; i < e->config.capacity; i++) {
+        for(unsigned int i = cfg.capacity; i < e->config.capacity; i++) {
             Particle_Free(e->particles[i]);
         }
 
@@ -417,7 +436,7 @@ bool Emitter_Reinit(Emitter *e, EmitterConfig cfg) {
     e->config = cfg;
 
     // Set new Particle deactivator function for all Particles.
-    for(size_t i = 0; i < e->config.capacity; i++) {
+    for(unsigned int i = 0; i < e->config.capacity; i++) {
         e->particles[i]->particle_Deactivator = e->config.particle_Deactivator;
     }
 
@@ -436,7 +455,7 @@ void Emitter_Stop(Emitter *e) {
 
 // Emitter_Free frees all allocated resources.
 void Emitter_Free(Emitter *e) {
-    for(size_t i = 0; i < e->config.capacity; i++) {
+    for(unsigned int i = 0; i < e->config.capacity; i++) {
         Particle_Free(e->particles[i]);
     }
     free(e->particles);
@@ -451,11 +470,11 @@ void Emitter_Burst(Emitter *e) {
         return;
 
     Particle *p = NULL;
-    size_t emitted = 0;
+    int emitted = 0;
 
     int amount = GetRandomValue(e->config.burst.min, e->config.burst.max);
 
-    for(size_t i = 0; i < e->config.capacity; i++) {
+    for(unsigned int i = 0; i < e->config.capacity; i++) {
         p = e->particles[i];
         if(!p->active) {
             Particle_Init(p, &e->config);
@@ -471,16 +490,16 @@ void Emitter_Burst(Emitter *e) {
 // Emitter_Update updates all particles and returns
 // the current amount of active particles.
 unsigned long Emitter_Update(Emitter *e, float dt) {
-    size_t emitNow = 0;
+    unsigned int emitNow = 0;
     Particle *p = NULL;
     unsigned long counter = 0;
 
     if(e->isEmitting) {
         e->mustEmit += dt * (float)e->config.emissionRate;
-        emitNow = (size_t)e->mustEmit; // floor
+        emitNow = (unsigned int)e->mustEmit; // floor
     }
 
-    for(size_t i = 0; i < e->config.capacity; i++) {
+    for(unsigned int i = 0; i < e->config.capacity; i++) {
         p = e->particles[i];
         if(p->active) {
             Particle_Update(p, dt);
@@ -500,8 +519,8 @@ unsigned long Emitter_Update(Emitter *e, float dt) {
 
 // Emitter_Draw draws all active particles.
 void Emitter_Draw(Emitter *e) {
-    BeginBlendMode(e->config.blendMode);
-    for(size_t i = 0; i < e->config.capacity; i++) {
+    // BeginBlendMode(e->config.blendMode);
+    for(unsigned int i = 0; i < e->config.capacity; i++) {
         Particle *p = e->particles[i];
         if(p->active) {
             DrawTexturePro(
@@ -514,24 +533,8 @@ void Emitter_Draw(Emitter *e) {
             );
         }
     }
-    EndBlendMode();
+    // EndBlendMode();
 }
-
-
-// ParticleSystem type.
-//----------------------------------------------------------------------------------
-
-// ParticleSystem is a set of emitters grouped logically
-// together to achieve a specific visual effect.
-// While Emitters can be used independently, ParticleSystem
-// offers some convenience for handling many Emitters at once.
-struct ParticleSystem {
-    bool active;
-    size_t length;
-    size_t capacity;
-    Vector2 origin;
-    Emitter **emitters;
-};
 
 // Particlesystem_New creates a new particle system
 // with the given amount of emitters.
@@ -577,7 +580,7 @@ bool ParticleSystem_Register(ParticleSystem *ps, Emitter *emitter) {
 // ParticleSystem_Deregister deregisters an Emitter by its pointer.
 // Returns true on success and false otherwise.
 bool ParticleSystem_Deregister(ParticleSystem *ps, Emitter *emitter) {
-    for(size_t i = 0; i < ps->length; i++) {
+    for(unsigned int i = 0; i < ps->length; i++) {
         if(ps->emitters[i] == emitter) {
             // Remove this emitter by replacing its pointer with the
             // last pointer, if it is not the only Emitter.
@@ -599,43 +602,57 @@ bool ParticleSystem_Deregister(ParticleSystem *ps, Emitter *emitter) {
 // ParticleSystem_SetOrigin sets the origin for all registered Emitters.
 void ParticleSystem_SetOrigin(ParticleSystem *ps, Vector2 origin) {
     ps->origin = origin;
-    for(size_t i = 0; i < ps->length; i++) {
+    for(unsigned int i = 0; i < ps->length; i++) {
         ps->emitters[i]->config.origin = origin;
+    }
+}
+
+// ParticleSystem_SetDirectionAngle sets the direction angle for all registered Emitters.
+void ParticleSystem_SetDirectionAngle(ParticleSystem *ps, FloatRange range) {
+    for(unsigned int i = 0; i < ps->length; i++) {
+        ps->emitters[i]->config.directionAngle = range;
+    }
+}
+
+// ParticleSystem_SetBaseRotation sets the base rotation for all registered Emitters.
+void ParticleSystem_SetBaseRotation(ParticleSystem *ps, float rotation) {
+    for(unsigned int i = 0; i < ps->length; i++) {
+        ps->emitters[i]->config.baseRotation = rotation;
     }
 }
 
 // ParticleSystem_Start runs Emitter_Start on all registered Emitters.
 void ParticleSystem_Start(ParticleSystem *ps) {
-    for(size_t i = 0; i < ps->length; i++) {
+    for(unsigned int i = 0; i < ps->length; i++) {
         Emitter_Start(ps->emitters[i]);
     }
 }
 
 // ParticleSystem_Stop runs Emitter_Stop on all registered Emitters.
 void ParticleSystem_Stop(ParticleSystem *ps) {
-    for(size_t i = 0; i < ps->length; i++) {
+    for(unsigned int i = 0; i < ps->length; i++) {
         Emitter_Stop(ps->emitters[i]);
     }
 }
 
 // ParticleSystem_Burst runs Emitter_Burst on all registered Emitters.
 void ParticleSystem_Burst(ParticleSystem *ps) {
-    for(size_t i = 0; i < ps->length; i++) {
+    for(unsigned int i = 0; i < ps->length; i++) {
         Emitter_Burst(ps->emitters[i]);
     }
 }
 
 // ParticleSystem_Draw runs Emitter_Draw on all registered Emitters.
 void ParticleSystem_Draw(ParticleSystem *ps) {
-    for(size_t i = 0; i < ps->length; i++) {
+    for(unsigned int i = 0; i < ps->length; i++) {
         Emitter_Draw(ps->emitters[i]);
     }
 }
 
 // ParticleSystem_Update runs Emitter_Update on all registered Emitters.
 unsigned long ParticleSystem_Update(ParticleSystem *ps, float dt) {
-    size_t counter = 0;
-    for(size_t i = 0; i < ps->length; i++) {
+    unsigned int counter = 0;
+    for(unsigned int i = 0; i < ps->length; i++) {
         counter += Emitter_Update(ps->emitters[i], dt);
     }
     return counter;
