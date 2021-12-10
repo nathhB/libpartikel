@@ -80,6 +80,7 @@ static void DrawColorPicker(const char *name, Vector2 pos, Color *color);
 static void DrawAlphaPicker(const char *name, Vector2 pos, unsigned char *alpha);
 static void InitParticleSystem(void);
 static Color HexToRGB(int hex);
+static void DrawParticle(Emitter *e, Particle *p);
 
 // --- Importing/Exporting ---
 
@@ -111,17 +112,18 @@ typedef struct
     char texture_path[512];
     Emitter *emitter;
     RenderTexture2D particle_editor_render_tex;
+    char metadata[512];
 } EmitterControl;
 
 static EmitterControl emitters[EMITTER_COUNT] = {
-    {.id = 0},
-    {.id = 1},
-    {.id = 2},
-    {.id = 3},
-    {.id = 4},
-    {.id = 5},
-    {.id = 6},
-    {.id = 7}
+    {.id = 0, .metadata = {0}},
+    {.id = 1, .metadata = {0}},
+    {.id = 2, .metadata = {0}},
+    {.id = 3, .metadata = {0}},
+    {.id = 4, .metadata = {0}},
+    {.id = 5, .metadata = {0}},
+    {.id = 6, .metadata = {0}},
+    {.id = 7, .metadata = {0}},
 };
 static EmitterControl *selected_emitter = NULL;
 static GuiFileDialogState sprite_dialog_state;
@@ -153,7 +155,8 @@ static EmitterConfig base_cfg = {
     .endColor = WHITE,
     .age = (FloatRange){0.5, 0.5},
     .blendMode = BLEND_ADDITIVE,
-    .rotationSpeed = (FloatRange){0, 0}
+    .rotationSpeed = (FloatRange){0, 0},
+    .particle_Draw = DrawParticle
 };
 
 static ParticleSystem *ps = NULL;
@@ -696,6 +699,17 @@ static Color HexToRGB(int hex)
     return color;
 }
 
+static void DrawParticle(Emitter *e, Particle *p)
+{
+    DrawTexturePro(
+        e->config.texture,
+        (Rectangle){0, 0, e->config.texture.width, e->config.texture.height},
+        (Rectangle){p->position.x - e->offset.x, p->position.y - e->offset.y, e->config.texture.width * p->scale.x, e->config.texture.height * p->scale.y},
+        (Vector2){e->config.textureOrigin.x * p->scale.x, e->config.textureOrigin.y * p->scale.y},
+        p->rotation,
+        LinearFade(e->config.startColor, e->config.endColor, p->age / p->ttl));
+}
+
 static bool Export(void)
 {
     // TODO: open a popup to select file name when no file has been imported
@@ -712,7 +726,7 @@ static bool Export(void)
         EmitterControl *ec = &emitters[i];
         Emitter *e = ec->emitter;
 
-        char emitter_str[512] = {0};
+        char emitter_str[1024] = {0};
         int cursor = 0;
         int len;
 
@@ -811,7 +825,11 @@ static bool Export(void)
 
         cursor += len;
 
-        if ((len = WriteEmitterString(emitter_str + cursor, sizeof(emitter_str) - cursor - 1, ec->texture_path)) < 0)
+        char path_and_meta[512] = {0};
+
+        snprintf(path_and_meta, sizeof(path_and_meta), "%s|%s", ec->texture_path, ec->metadata);
+
+        if ((len = WriteEmitterString(emitter_str + cursor, sizeof(emitter_str) - cursor - 1, path_and_meta)) < 0)
             goto write_error;
 
         if (fputs(emitter_str, f) < 0)
@@ -924,6 +942,13 @@ static bool Import(const char *path)
         if (ReadEmitterString(tokens[19], ec->texture_path) < 0)
             goto read_error;
 
+        memset(ec->metadata, 0, sizeof(ec->metadata));
+
+        if (ReadEmitterString(tokens[20], ec->metadata) < 0)
+            goto read_error;
+
+        printf("-----------> %s\n", ec->metadata);
+
         UnloadTexture(ec->emitter->config.texture);
         UnloadRenderTexture(ec->particle_editor_render_tex);
 
@@ -1033,7 +1058,9 @@ static int WriteEmitterString(char *str, size_t size, const char *to_write)
     if (strlen(to_write) > size)
         return -1;
 
-    return snprintf(str, strlen(to_write) + 1, "%s|", to_write);
+    snprintf(str, strlen(to_write) + 1, "%s|", to_write);
+
+    return strlen(to_write) + 1;
 }
 
 static int ReadEmitterIntValue(char *str, int *val)
@@ -1098,7 +1125,7 @@ static int ReadEmitterColor(char *str, Color *val)
 
 static int ReadEmitterString(char *str, char *read_str)
 {
-    int len = sscanf(str, "%s", read_str);
+    int len = sscanf(str, "%s|", read_str);
 
     if (!len)
         return -1;
@@ -1110,5 +1137,5 @@ static const char *GetExportCommentLine(void)
 {
     return "# is active | direction | velocity | direction angle | velocity angle | offset | \
 origin acceleration | burst | capacity | origin | external acceleration | base scale | scale increase | \
-start color | end color | life time | base rotation | rotation speed | texture origin | texture path\n";
+start color | end color | life time | base rotation | rotation speed | texture origin | texture path | metadata\n";
 }

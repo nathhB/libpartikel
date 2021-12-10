@@ -61,7 +61,7 @@
 // THIS MUST BE COMMENTED OUT
 // You need to uncomment it in some editors to enable syntax highlighting
 // in the following code.
-#define LIBPARTIKEL_IMPLEMENTATION
+// #define LIBPARTIKEL_IMPLEMENTATION
 // -----------------------------------------------------------------------
 
 // Min/Max pair structs for various types.
@@ -107,9 +107,13 @@ struct EmitterConfig {
     FloatRange rotationSpeed;       // Speed rotation of particles
     Texture2D texture;              // The texture used as particle texture.    
     Vector2 textureOrigin;          // Origin of the particle's texture
+    void *user_data;                // User data
 
-    bool (*particle_Deactivator)(Particle *); // Pointer to a function that determines when
-                                                     // a particle is deactivated.
+    bool (*particle_Deactivator)(Particle *);   // Pointer to a function that determines when
+                                                // a particle is deactivated.
+
+    void (*particle_Draw)(Emitter *e, Particle *p); // Pointer to a function that draw a single particle
+
 };
 
 // Particle type.
@@ -522,16 +526,8 @@ void Emitter_Draw(Emitter *e) {
     // BeginBlendMode(e->config.blendMode);
     for(unsigned int i = 0; i < e->config.capacity; i++) {
         Particle *p = e->particles[i];
-        if(p->active) {
-            DrawTexturePro(
-                e->config.texture,
-                (Rectangle){0, 0, e->config.texture.width, e->config.texture.height},
-                (Rectangle){p->position.x - e->offset.x, p->position.y - e->offset.y, e->config.texture.width * p->scale.x, e->config.texture.height * p->scale.y},
-                (Vector2){e->config.textureOrigin.x * p->scale.x, e->config.textureOrigin.y * p->scale.y},
-                p->rotation,
-                LinearFade(e->config.startColor, e->config.endColor,p->age/p->ttl)
-            );
-        }
+        if(p->active)
+            e->config.particle_Draw(e, p);
     }
     // EndBlendMode();
 }
