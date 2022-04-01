@@ -145,7 +145,7 @@ static EmitterConfig base_cfg = {
     .offset = (FloatRange){0, 0},
     .originAcceleration = (FloatRange){0, 0},
     .burst = (IntRange){1, 1},
-    .capacity = 50,
+    .capacity = 1000,
     .emissionRate = 10,
     .origin = (Vector2){0, 0},
     .externalAcceleration = (Vector2){0, 0},
@@ -859,6 +859,7 @@ static bool Import(const char *path)
     int len = 0;
     int cursor = 0;
     int i = 0;
+    int read_token_count = 0;
 
     while (getline(&line, &line_len, f) != -1)
     {
@@ -878,76 +879,78 @@ static bool Import(const char *path)
             token = strtok(NULL, "|");
         }
 
+        read_token_count = 0;
+
         int is_active;
 
-        if (ReadEmitterIntValue(tokens[0], &is_active) < 0)
+        if (ReadEmitterIntValue(tokens[read_token_count], &is_active) < 0)
             goto read_error;
 
         e->isActive = is_active;
 
-        if (ReadEmitterVector2(tokens[1], &e->config.direction) < 0)
+        if (ReadEmitterVector2(tokens[++read_token_count], &e->config.direction) < 0)
             goto read_error;
 
-        if (ReadEmitterFloatRange(tokens[2], &e->config.velocity) < 0)
+        if (ReadEmitterFloatRange(tokens[++read_token_count], &e->config.velocity) < 0)
             goto read_error;
 
-        if (ReadEmitterFloatRange(tokens[3], &e->config.directionAngle) < 0)
+        if (ReadEmitterFloatRange(tokens[++read_token_count], &e->config.directionAngle) < 0)
             goto read_error;
 
-        if (ReadEmitterFloatRange(tokens[4], &e->config.velocityAngle) < 0)
+        if (ReadEmitterFloatRange(tokens[++read_token_count], &e->config.velocityAngle) < 0)
             goto read_error;
 
-        if (ReadEmitterFloatRange(tokens[5], &e->config.offset) < 0)
+        if (ReadEmitterFloatRange(tokens[++read_token_count], &e->config.offset) < 0)
             goto read_error;
 
-        if (ReadEmitterFloatRange(tokens[6], &e->config.originAcceleration) < 0)
+        if (ReadEmitterFloatRange(tokens[++read_token_count], &e->config.originAcceleration) < 0)
             goto read_error;
 
-        if (ReadEmitterIntRange(tokens[7], &e->config.burst) < 0)
+        if (ReadEmitterIntRange(tokens[++read_token_count], &e->config.burst) < 0)
             goto read_error;
 
-        if (ReadEmitterIntValue(tokens[8], (int *)&e->config.capacity) < 0)
+        if (ReadEmitterIntValue(tokens[++read_token_count], (int *)&e->config.capacity) < 0)
             goto read_error;
 
-        if (ReadEmitterVector2(tokens[9], &e->config.origin) < 0)
+        if (ReadEmitterVector2(tokens[++read_token_count], &e->config.origin) < 0)
             goto read_error;
 
-        if (ReadEmitterVector2(tokens[10], &e->config.externalAcceleration) < 0)
+        if (ReadEmitterVector2(tokens[++read_token_count], &e->config.externalAcceleration) < 0)
             goto read_error;
 
-        if (ReadEmitterVector2(tokens[11], &e->config.baseScale) < 0)
+        if (ReadEmitterVector2(tokens[++read_token_count], &e->config.baseScale) < 0)
             goto read_error;
 
-        if (ReadEmitterVector2(tokens[12], &e->config.scaleIncrease) < 0)
+        if (ReadEmitterVector2(tokens[++read_token_count], &e->config.scaleIncrease) < 0)
             goto read_error;
 
-        if (ReadEmitterColor(tokens[13], &e->config.startColor) < 0)
+        if (ReadEmitterColor(tokens[++read_token_count], &e->config.startColor) < 0)
             goto read_error;
 
-        if (ReadEmitterColor(tokens[14], &e->config.endColor) < 0)
+        if (ReadEmitterColor(tokens[++read_token_count], &e->config.endColor) < 0)
             goto read_error;
 
-        if (ReadEmitterFloatRange(tokens[15], &e->config.age) < 0)
+        if (ReadEmitterFloatRange(tokens[++read_token_count], &e->config.age) < 0)
             goto read_error;
 
-        if (ReadEmitterFloatValue(tokens[16], &e->config.baseRotation) < 0)
+        if (ReadEmitterFloatValue(tokens[++read_token_count], &e->config.baseRotation) < 0)
             goto read_error;
 
-        if (ReadEmitterFloatRange(tokens[17], &e->config.rotationSpeed) < 0)
+        if (ReadEmitterFloatRange(tokens[++read_token_count], &e->config.rotationSpeed) < 0)
             goto read_error;
 
-        if (ReadEmitterVector2(tokens[18], &e->config.textureOrigin) < 0)
+        if (ReadEmitterVector2(tokens[++read_token_count], &e->config.textureOrigin) < 0)
             goto read_error;
 
-        if (ReadEmitterString(tokens[19], ec->texture_path) < 0)
+        if (ReadEmitterString(tokens[++read_token_count], ec->texture_path) < 0)
             goto read_error;
 
         memset(ec->metadata, 0, sizeof(ec->metadata));
 
-        if (ReadEmitterString(tokens[20], ec->metadata) < 0)
-            goto read_error;
-
-        printf("-----------> %s\n", ec->metadata);
+        if (ReadEmitterString(tokens[++read_token_count], ec->metadata) < 0)
+        {
+            printf("No metadata for emitter %d\n", i + 1);
+        }
 
         UnloadTexture(ec->emitter->config.texture);
         UnloadRenderTexture(ec->particle_editor_render_tex);
@@ -964,6 +967,7 @@ static bool Import(const char *path)
     return true;
 
 read_error:
+    printf("Read error on emitter %d on token %d\n", i, read_token_count);
     fclose(f);
 
     return false;
@@ -1125,7 +1129,7 @@ static int ReadEmitterColor(char *str, Color *val)
 
 static int ReadEmitterString(char *str, char *read_str)
 {
-    int len = sscanf(str, "%s|", read_str);
+    int len = sscanf(str, "%s", read_str);
 
     if (!len)
         return -1;
