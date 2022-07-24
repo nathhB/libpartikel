@@ -523,13 +523,13 @@ unsigned long Emitter_Update(Emitter *e, float dt) {
 
 // Emitter_Draw draws all active particles.
 void Emitter_Draw(Emitter *e) {
-    // BeginBlendMode(e->config.blendMode);
+    BeginBlendMode(e->config.blendMode);
     for(unsigned int i = 0; i < e->config.capacity; i++) {
         Particle *p = e->particles[i];
         if(p->active)
             e->config.particle_Draw(e, p);
     }
-    // EndBlendMode();
+    EndBlendMode();
 }
 
 // Particlesystem_New creates a new particle system
